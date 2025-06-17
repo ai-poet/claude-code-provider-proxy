@@ -39,7 +39,7 @@ load_dotenv()
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    model_config = SettingsConfigDict(env_file="../../.env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     openai_api_key: str
     big_model_name: str
@@ -52,12 +52,34 @@ class Settings(BaseSettings):
     app_version: str = "0.2.0"
     log_level: str = "INFO"
     log_file_path: Optional[str] = "log.jsonl"
-    host: str = "127.0.0.1"
+    host: str = "0.0.0.0"  # 容器环境需要监听所有接口
     port: int = 8080
     reload: bool = True
 
 
 settings = Settings()
+
+# 验证关键环境变量是否正确加载
+def validate_settings():
+    """验证关键配置是否正确加载"""
+    missing_vars = []
+    
+    if not settings.openai_api_key:
+        missing_vars.append("OPENAI_API_KEY")
+    if not settings.big_model_name:
+        missing_vars.append("BIG_MODEL_NAME")
+    if not settings.small_model_name:
+        missing_vars.append("SMALL_MODEL_NAME")
+    
+    if missing_vars:
+        _error_console.print(f"❌ 缺少必需的环境变量: {', '.join(missing_vars)}")
+        _error_console.print("请确保在Zeabur中设置了这些环境变量")
+        sys.exit(1)
+    else:
+        _console.print("✅ 所有必需的环境变量都已正确加载")
+
+# 启动时验证配置
+validate_settings()
 
 
 _console = Console()
@@ -1855,6 +1877,10 @@ if __name__ == "__main__":
         (settings.big_model_name, "magenta"),
         ("\n   Small Model   : ", "default"),
         (settings.small_model_name, "green"),
+        ("\n   Base URL      : ", "default"),
+        (settings.base_url, "blue"),
+        ("\n   API Key       : ", "default"),
+        (f"{'*' * 8}{settings.openai_api_key[-4:]}" if len(settings.openai_api_key) > 4 else "****", "dim"),
         ("\n   Log Level     : ", "default"),
         (settings.log_level.upper(), "yellow"),
         ("\n   Log File      : ", "default"),
