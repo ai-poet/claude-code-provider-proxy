@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     small_model_name: str
     base_url: str = "https://openrouter.ai/api/v1"
     referrer_url: str = "http://localhost:8080/claude_proxy"
+    auth_token: Optional[str] = None  # Bearer token验证，可选
 
     app_name: str = "AnthropicProxy"
     app_version: str = "0.2.0"
@@ -1772,6 +1773,46 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
+def verify_bearer_token(request: Request) -> bool:
+    """验证Bearer token，如果未配置auth_token则跳过验证"""
+    if not settings.auth_token:
+        return True  # 未配置token则跳过验证
+    
+    authorization = request.headers.get("Authorization")
+    if not authorization:
+        return False
+    
+    if not authorization.startswith("Bearer "):
+        return False
+    
+    token = authorization[7:]  # 移除 "Bearer " 前缀
+    return token == settings.auth_token
+
+
+@app.middleware("http")
+async def auth_middleware(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    """Bearer token验证中间件"""
+    # 健康检查端点跳过验证
+    if request.url.path in ["/", "/health"]:
+        return await call_next(request)
+    
+    if not verify_bearer_token(request):
+        return JSONResponse(
+            status_code=401,
+            content={
+                "type": "error",
+                "error": {
+                    "type": "authentication_error",
+                    "message": "Invalid or missing Bearer token"
+                }
+            }
+        )
+    
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def logging_middleware(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
@@ -1818,6 +1859,8 @@ if __name__ == "__main__":
         (settings.log_level.upper(), "yellow"),
         ("\n   Log File      : ", "default"),
         (settings.log_file_path or "Disabled", "dim"),
+        ("\n   Auth Token    : ", "default"),
+        ("Enabled", "bold green") if settings.auth_token else ("Disabled", "dim"),
         ("\n   Listening on  : ", "default"),
         (f"http://{settings.host}:{settings.port}", "bold white"),
         ("\n   Reload        : ", "default"),
