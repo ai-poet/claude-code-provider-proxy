@@ -62,6 +62,11 @@ settings = Settings()
 # 验证关键环境变量是否正确加载
 def validate_settings():
     """验证关键配置是否正确加载"""
+    # 创建本地console实例，避免依赖全局变量
+    from rich.console import Console
+    console = Console()
+    error_console = Console(stderr=True, style="bold red")
+    
     missing_vars = []
     
     if not settings.openai_api_key:
@@ -72,11 +77,11 @@ def validate_settings():
         missing_vars.append("SMALL_MODEL_NAME")
     
     if missing_vars:
-        _error_console.print(f"❌ 缺少必需的环境变量: {', '.join(missing_vars)}")
-        _error_console.print("请确保在Zeabur中设置了这些环境变量")
+        error_console.print(f"❌ 缺少必需的环境变量: {', '.join(missing_vars)}")
+        error_console.print("请确保在Zeabur中设置了这些环境变量")
         sys.exit(1)
     else:
-        _console.print("✅ 所有必需的环境变量都已正确加载")
+        console.print("✅ 所有必需的环境变量都已正确加载")
 
 # 启动时验证配置
 validate_settings()
@@ -1747,6 +1752,13 @@ async def root_health_check() -> JSONResponse:
             "proxy_name": settings.app_name,
             "version": settings.app_version,
             "status": "ok",
+            "config": {
+                "big_model": settings.big_model_name,
+                "small_model": settings.small_model_name,
+                "base_url": settings.base_url,
+                "auth_enabled": bool(settings.auth_token),
+                "api_key_configured": bool(settings.openai_api_key)
+            },
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
@@ -1880,7 +1892,7 @@ if __name__ == "__main__":
         ("\n   Base URL      : ", "default"),
         (settings.base_url, "blue"),
         ("\n   API Key       : ", "default"),
-        (f"{'*' * 8}{settings.openai_api_key[-4:]}" if len(settings.openai_api_key) > 4 else "****", "dim"),
+        (f"{'*' * 8}{settings.openai_api_key[-4:]}" if len(settings.openai_api_key) >= 4 else "****", "dim"),
         ("\n   Log Level     : ", "default"),
         (settings.log_level.upper(), "yellow"),
         ("\n   Log File      : ", "default"),
